@@ -202,10 +202,11 @@ const handleMenu = async () => {
     });
 };
 
-const runCodex = async (args, silent = false) => {
+const runCodex = async (args, silent = false, writeMode = false) => {
     const noLog = args.includes('--no-log') || silent;
     const noMap = args.includes('--no-map');
     const noMemory = args.includes('--no-memory');
+    const writeModeEnabled = writeMode || args.includes('--write');
     
     let focus = null;
     const focusIdx = args.indexOf('--focus');
@@ -214,7 +215,7 @@ const runCodex = async (args, silent = false) => {
     }
 
     const cleanArgs = args.filter((a, i) => {
-        if (['--no-log', '--no-map', '--no-memory', '--focus', '--no-rules', '--low-token'].includes(a)) return false;
+        if (['--no-log', '--no-map', '--no-memory', '--focus', '--no-rules', '--low-token', '--write'].includes(a)) return false;
         if (i > 0 && args[i-1] === '--focus') return false;
         return true;
     });
@@ -281,7 +282,14 @@ const runCodex = async (args, silent = false) => {
         if (!noLog) log(`${C.dim}--- [${C.blue}${curName}${C.reset}${C.dim}] ---${C.reset}`);
 
         return new Promise((resolve) => {
-            const child = spawn('codex', ['exec', '--skip-git-repo-check', finalPrompt], { stdio: ['pipe', 'inherit', 'inherit'], env: process.env });
+            const codexArgs = ['exec', '--skip-git-repo-check'];
+            if (writeModeEnabled) {
+                codexArgs.push('-c', 'sandbox_mode="danger-full-access"');
+                codexArgs.push('-c', 'approval_policy="never"');
+            }
+            codexArgs.push(finalPrompt);
+            
+            const child = spawn('codex', codexArgs, { stdio: ['pipe', 'inherit', 'inherit'], env: process.env });
             child.stdin.end(); // IMPORTANT: close stdin so codex knows no more input is coming and exits
             const timer = setTimeout(() => {
                 child.kill();
@@ -319,10 +327,9 @@ const handleChat = async () => {
     let focus = null;
     let noMap = false;
     let noMemory = false;
-    let lowToken = false;
-    let useRules = true;
+    let writeMode = true;
     
-    const commands = ['/focus', '/no-map', '/no-memory', '/low-token', '/rules', '/help', '/exit', '/quit'];
+    const commands = ['/focus', '/no-map', '/no-memory', '/help', '/exit', '/quit'];
     const completer = (line) => {
         const hits = commands.filter((c) => c.startsWith(line));
         return [hits.length ? hits : commands, line];
@@ -344,7 +351,7 @@ const handleChat = async () => {
             }
         } catch {}
 
-        let statusLine = `${C.dim}[${focus || (isHome ? 'Home-Warning ⚠️' : 'Full Scan')}]${noMap?' [No Map]':''}${noMemory?' [No Hist]':''}${useRules?' [Rules]':''}${lowToken?' [Low-T]':''}${C.reset}`;
+        let statusLine = `${C.dim}[${focus || (isHome ? 'Home-Warning ⚠️' : 'Full Scan')}]${noMap?' [No Map]':''}${noMemory?' [No Hist]':''} [Free] [Write]${C.reset}`;
         if (isHome && !focus && !noMap) {
             log(`${C.yellow}⚠️ Warning: Scanning Home Directory. Use /focus to save tokens.${C.reset}`);
         }
@@ -368,14 +375,8 @@ const handleChat = async () => {
                 } else if (cmd === 'no-memory') {
                     noMemory = !noMemory;
                     success(`Chat History: ${noMemory ? 'OFF' : 'ON'}`);
-                } else if (cmd === 'low-token') {
-                    lowToken = !lowToken;
-                    success(`Low Token Mode: ${lowToken ? 'ON' : 'OFF'}`);
-                } else if (cmd === 'rules') {
-                    useRules = !useRules;
-                    success(`Optimized Rules: ${useRules ? 'ON' : 'OFF'}`);
                 } else if (cmd === 'help') {
-                    log(`${C.yellow}Chat Commands: /focus <kd>, /no-map, /no-memory, /low-token, /rules, /help, /exit${C.reset}`);
+                    log(`${C.yellow}Chat Commands: /focus <kd>, /no-map, /no-memory, /help, /exit${C.reset}`);
                 } else {
                     error(`Unknown command: ${cmd}`);
                 }
@@ -386,12 +387,10 @@ const handleChat = async () => {
             const flags = [];
             if (noMap) flags.push('--no-map');
             if (noMemory) flags.push('--no-memory');
-            if (lowToken) flags.push('--low-token');
-            if (!useRules) flags.push('--no-rules');
             if (focus) { flags.push('--focus'); flags.push(focus); }
 
             rl.pause(); // Pause readline while spawned process runs
-            await runCodex([...flags, raw], true); 
+            await runCodex([...flags, raw], true, writeMode); 
             rl.resume();
             ask();
         });
@@ -407,7 +406,7 @@ const args = process.argv.slice(2);
 const command = args[0] || 'menu';
 
 switch (command) {
-  case 'run': await runCodex(args.slice(1)); break;
+  case 'run': await runCodex(args.slice(1), false, true); break;
   case 'chat': await handleChat(); break;
   case 'menu': await handleMenu(); break;
   case 'login':
