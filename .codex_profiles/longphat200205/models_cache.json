@@ -1,7 +1,7 @@
 {
-  "fetched_at": "2026-03-24T04:46:52.496443Z",
+  "fetched_at": "2026-03-24T07:22:13.285222Z",
   "etag": "W/\"07b0787f6e96acd91f0b14537d270544\"",
-  "client_version": "0.115.0",
+  "client_version": "0.116.0",
   "models": [
     {
       "slug": "gpt-5.4",
@@ -60,7 +60,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": true
     },
     {
@@ -120,7 +120,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": true
     },
     {
@@ -183,7 +183,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": true
     },
     {
@@ -246,7 +246,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": true
     },
     {
@@ -301,7 +301,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": true
     },
     {
@@ -356,7 +356,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     },
     {
@@ -407,7 +407,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     },
     {
@@ -458,7 +458,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     },
     {
@@ -509,7 +509,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     },
     {
@@ -564,7 +564,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     },
     {
@@ -611,7 +611,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     },
     {
@@ -658,7 +658,7 @@
         "text",
         "image"
       ],
-      "prefer_websockets": true,
+      "prefer_websockets": false,
       "supports_search_tool": false
     }
   ]

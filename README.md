@@ -161,7 +161,7 @@ Tool/
 | **memoryManager.js** | Lưu 5 exchanges gần nhất, inject 3 exchanges cuối vào prompt. Dữ liệu mã hóa trên disk. |
 | **projectMap.js** | Quét cây thư mục (depth 1), lọc `node_modules`, `dist`, `.DS_Store`... Hỗ trợ focus filter theo keyword. |
 | **proxyManager.js** | Đọc `proxies.txt`, hỗ trợ strategy `random` hoặc `round-robin`. Kiểm tra proxy sống bằng `curl ifconfig.me`. |
-| **rules.js** | System prompt mặc định: ưu tiên intent người dùng, trả lời trực tiếp, tự do sáng tạo. |
+| **rules.js** | System prompt mặc định: ưu tiên intent người dùng, phản hồi như một kỹ sư thực dụng, bám root-cause và trade-off. |
 
 ---
 
