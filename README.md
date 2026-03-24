@@ -144,15 +144,17 @@ Chat [longphat200205] [Full Scan] [Free] [Write] >
 
 ```
 Tool/
-├── codex-pro.js        # 🧠 Core: CLI entry, menu TUI, chat, profile manager
+├── codex-pro.js        # 🧠 Core orchestrator: parse lệnh, gọi service/UI
 ├── behavior.js         # ⏱️ Delay engine: mô phỏng hành vi người dùng (2-15s)
 ├── cryptoHelper.js     # 🔐 Mã hóa AES-256-GCM cho metadata & memory
 ├── fingerprint.js      # 🎭 Tạo User-Agent & headers ngẫu nhiên
 ├── healthCheck.js      # 🏥 Phát hiện shadow ban, rate limit, session hết hạn
 ├── memoryManager.js    # 💾 Lưu trữ 5 hội thoại gần nhất (mã hóa)
+├── profileManager.js   # 👤 Logic profile, symlink, quota snapshot, metadata
 ├── projectMap.js       # 🗺️ Quét & tạo cây thư mục project cho context
 ├── proxyManager.js     # 🌐 Quản lý pool proxy (random/round-robin)
 ├── rules.js            # 📏 System prompt tùy chỉnh cho AI
+├── terminalUI.js       # 🖥️ Màu sắc, log, bảng menu TUI, brand LONG PHÁT
 ├── proxies.txt         # 📝 Danh sách proxy (1 proxy/dòng)
 ├── .env                # 🔑 Biến môi trường (CODEX_KEY, etc.)
 └── .codex_profiles/    # 👤 Thư mục chứa tất cả profile tài khoản
@@ -282,16 +284,15 @@ Khi một profile gặp lỗi (exit code ≠ 0 và ≠ 130):
 
 Giao diện dạng terminal (Text UI) với navigation bằng phím:
 
-```
+``` 
 --- Codex-Pro v7.2 (Project-Aware Brain) ---
-Arrows: Move | Enter: Select | q: Quit
+Navigation -> [↑/↓] Move | [Enter] Activate
+Actions    -> [c] Chat | [i] Check IP | [d] Delete | [q] Quit
 
    Profile          Usage    Proxy
  > longphat200205   12       No    (Active)
    longphat12022002 8        Yes
    longphat12022903 3        No
-
-c) Chat  i) Check IP  d) Delete  q) Quit
 ```
 
 ---
