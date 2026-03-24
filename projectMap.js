@@ -4,115 +4,183 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAP_FILE = path.join(process.cwd(), '.project-map.md');
+const IGNORE = new Set([
+    'node_modules', 'vendor', 'assets', 'dist', 'build',
+    'runtime', 'temp', 'tmp', '.DS_Store', '.Trash',
+    'Library', 'Pictures', 'Music', 'Movies', 'Public',
+    'Applications', 'Desktop', 'Documents', 'Downloads'
+]);
 
-/**
- * Project Map Manager for Codex-Pro
- * Manages the long-term project state and tree structure.
- */
 class ProjectMap {
-    /**
-     * Initialize the map by scanning the project.
-     */
     init(silent = true) {
-        if (!silent) log(`Initializing Project Map...`);
+        if (!silent) {
+            // Reserved for future terminal logging.
+        }
+        this.writeSnapshot();
+        return MAP_FILE;
+    }
+
+    ensure() {
+        if (!fs.existsSync(MAP_FILE)) {
+            this.writeSnapshot();
+        }
+        return MAP_FILE;
+    }
+
+    writeSnapshot() {
         const projectName = path.basename(process.cwd());
-        const tree = this.generateTree(process.cwd());
+        const tree = this.generateTree(process.cwd(), {
+            maxDepth: 2,
+            maxEntriesPerDir: 20,
+            maxTotalLines: 80
+        });
         const content = `# Project State: [${projectName}]
 ## Last Update: ${new Date().toLocaleString()}
 
-## 📂 Current Tree Structure
+## Current Tree Structure
 \`\`\`text
 ${tree}
 \`\`\`
 
-## 🧠 Memory Context
-- Database: Not detected
-- Auth: Not detected
-- Framework: Not detected
+## Memory Context
+- Scope: Compact snapshot for prompt injection
+- Strategy: Expand only when repo-wide context is required
 `;
         fs.writeFileSync(MAP_FILE, content);
-        return MAP_FILE;
     }
 
-    /**
-     * Simple recursive tree generation with filtering support.
-     */
-    generateTree(dir, prefix = '', filter = null, depth = 0) {
-        const MAX_DEPTH = 1; // Default depth limit for full scan
-        const IGNORE = [
-            'node_modules', 'vendor', 'assets', 'dist', 'build',
-            'runtime', 'temp', 'tmp', '.DS_Store', '.Trash', 
-            'Library', 'Pictures', 'Music', 'Movies', 'Public', 
-            'Applications', 'Desktop', 'Documents', 'Downloads'
-        ];
-        let out = '';
-        let files = [];
-        try {
-            files = fs.readdirSync(dir);
-        } catch (err) {
+    generateTree(rootDir, options = {}) {
+        const state = { lines: 0, truncated: false };
+        return this.walk(rootDir, options, '', 0, state);
+    }
+
+    walk(dir, options, prefix, depth, state) {
+        const {
+            filter = null,
+            maxDepth = 1,
+            maxEntriesPerDir = 12,
+            maxTotalLines = 80
+        } = options;
+
+        if (state.lines >= maxTotalLines) {
+            state.truncated = true;
             return '';
         }
-        
-        // Filter out dot-files/folders and IGNORE list
-        const filteredFiles = files.filter(f => !IGNORE.includes(f) && !f.startsWith('.'));
-        const filters = filter ? filter.split(',').map(f => f.trim().toLowerCase()) : null;
 
-        filteredFiles.forEach((file, index) => {
-            const absolute = path.join(dir, file);
-            let isDir = false;
-            try {
-                isDir = fs.statSync(absolute).isDirectory();
-            } catch {
-                return; // Skip if we can't stat the file
-            }
-            
-            const isLast = index === filteredFiles.length - 1;
-
-            if (filters) {
-                const matches = filters.some(f => file.toLowerCase().includes(f));
-                if (isDir) {
-                    const sub = this.generateTree(absolute, prefix + (isLast ? '    ' : '│   '), filter, depth + 1);
-                    if (sub || matches) {
-                        out += `${prefix}${isLast ? '└── ' : '├── '}${file}/\n${sub}`;
+        let entries = [];
+        try {
+            entries = fs.readdirSync(dir)
+                .filter((name) => !IGNORE.has(name) && !name.startsWith('.'))
+                .map((name) => {
+                    const absolute = path.join(dir, name);
+                    try {
+                        return {
+                            name,
+                            absolute,
+                            isDir: fs.statSync(absolute).isDirectory()
+                        };
+                    } catch {
+                        return null;
                     }
-                } else if (matches) {
-                    out += `${prefix}${isLast ? '└── ' : '├── '}${file}\n`;
-                }
-            } else {
-                if (depth >= MAX_DEPTH) return; // Stop recursion if too deep
-                out += `${prefix}${isLast ? '└── ' : '├── '}${file}${isDir ? '/' : ''}\n`;
-                if (isDir) {
-                    out += this.generateTree(absolute, prefix + (isLast ? '    ' : '│   '), null, depth + 1);
-                }
+                })
+                .filter(Boolean)
+                .sort((a, b) => {
+                    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                });
+        } catch {
+            return '';
+        }
+
+        const filters = filter
+            ? filter.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean)
+            : null;
+        const limitedEntries = entries.slice(0, maxEntriesPerDir);
+        let out = '';
+
+        limitedEntries.forEach((entry, index) => {
+            if (state.lines >= maxTotalLines) {
+                state.truncated = true;
+                return;
+            }
+
+            const isLast = index === limitedEntries.length - 1;
+            const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+            const matches = !filters || filters.some((value) => entry.name.toLowerCase().includes(value));
+            let childOutput = '';
+
+            if (entry.isDir && depth < maxDepth) {
+                childOutput = this.walk(entry.absolute, options, nextPrefix, depth + 1, state);
+            }
+
+            if (filters && !matches && !childOutput) {
+                return;
+            }
+
+            out += `${prefix}${isLast ? '└── ' : '├── '}${entry.name}${entry.isDir ? '/' : ''}\n`;
+            state.lines += 1;
+
+            if (state.lines >= maxTotalLines) {
+                state.truncated = true;
+                return;
+            }
+
+            if (childOutput) {
+                out += childOutput;
             }
         });
+
+        if (entries.length > maxEntriesPerDir && !filters && state.lines < maxTotalLines) {
+            out += `${prefix}${limitedEntries.length > 0 ? '├──' : '└──'} ...\n`;
+            state.lines += 1;
+            state.truncated = true;
+        }
+
+        if (depth === 0 && state.truncated && state.lines < maxTotalLines) {
+            out += '... truncated ...\n';
+            state.lines += 1;
+        }
+
         return out;
     }
 
-    /**
-     * Read map for prompt injection.
-     */
-    getSummary(focus = null) {
+    getSummary(focus = null, mode = 'concise') {
         if (focus) {
-            const tree = this.generateTree(process.cwd(), '', focus, 0);
-            return `\n--- PROJECT CONTEXT (Focus: ${focus}) ---\n${tree || "No matches found."}\n`;
+            const tree = this.generateTree(process.cwd(), {
+                filter: focus,
+                maxDepth: 4,
+                maxEntriesPerDir: 20,
+                maxTotalLines: 120
+            });
+            return `\n--- PROJECT CONTEXT (Focus: ${focus}) ---\n${tree || 'No matches found.'}\n`;
         }
+
+        const tree = this.generateTree(process.cwd(), {
+            maxDepth: mode === 'expanded' ? 3 : 2,
+            maxEntriesPerDir: mode === 'expanded' ? 24 : 20,
+            maxTotalLines: mode === 'expanded' ? 120 : 70
+        });
+
+        if (tree) {
+            return `\n--- PROJECT CONTEXT (${mode === 'expanded' ? 'Expanded' : 'Concise'}) ---\n${tree}\n`;
+        }
+
         if (fs.existsSync(MAP_FILE)) {
-            const tree = this.generateTree(process.cwd(), '', null, 0); // Always use latest concise tree
-            return `\n--- PROJECT CONTEXT (Concise) ---\n${tree}\n`;
+            const content = fs.readFileSync(MAP_FILE, 'utf8');
+            const match = content.match(/```text\n([\s\S]*?)\n```/);
+            if (match?.[1]) {
+                return `\n--- PROJECT CONTEXT (Cached) ---\n${match[1]}\n`;
+            }
         }
-        return "";
+
+        return '';
     }
 
-    /**
-     * Update map based on file changes.
-     */
     async logChange(file, type = '*') {
         if (!fs.existsSync(MAP_FILE)) return;
         let content = fs.readFileSync(MAP_FILE, 'utf8');
         const timestamp = new Date().toLocaleString();
         content = content.replace(/## Last Update: .*/, `## Last Update: ${timestamp}`);
-        
         fs.writeFileSync(MAP_FILE, content);
     }
 }

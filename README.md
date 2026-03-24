@@ -1,4 +1,4 @@
-# 🚀 Codex-Pro v7.2 — "Project-Aware Brain"
+# 🚀 Codex-Pro v7.3 — "Smart Context Engine"
 
 > Bộ công cụ quản lý đa tài khoản OpenAI Codex CLI, tích hợp **xoay vòng tự động**, **proxy tàng hình**, **toàn quyền sandbox**, và **context thông minh**.
 
@@ -260,7 +260,7 @@ http://user2:pass2@proxy2.com:3128
 
 ### Sandbox & Quyền
 
-Codex-Pro v7.2 mặc định chạy với:
+Codex-Pro v7.3 mặc định chạy với:
 
 | Config | Giá trị | Ý nghĩa |
 |--------|---------|---------|
@@ -291,7 +291,7 @@ Khi một profile gặp lỗi (exit code ≠ 0 và ≠ 130):
 Giao diện dạng terminal (Text UI) với navigation bằng phím:
 
 ``` 
---- Codex-Pro v7.2 (Project-Aware Brain) ---
+--- Codex-Pro v7.3 (Smart Context Engine) ---
 Navigation -> [↑/↓] Move | [Enter] Activate
 Actions    -> [c] Chat | [i] Check IP | [d] Delete | [q] Quit
 
@@ -305,13 +305,15 @@ Actions    -> [c] Chat | [i] Check IP | [d] Delete | [q] Quit
 
 ## 📝 Changelog
 
-### v7.3 "Modular Architecture Refactor"
-- ✅ **Clean Code**: Thay vì 1 file khổng lồ, toàn bộ dự án đã được refactor thành nhiều Service/Module độc lập (Profile, UI, Chat, Prompt).
-- ✅ **Try-Catch .env**: Fix crash EPERM khó chịu khi dùng trong môi trường sandbox khắt khe.
+### v7.3 "Smart Context Engine & Modular Refactor" (Latest)
+- 🧠 **Smart Context Engine**: Tự động đoán ý định (Intent Detection) dựa vào RegEx để quyết định có thêm Project Map, Context History hay không, giúp tiết kiệm hàng ngàn token.
+- 🎯 **Auto-Focus**: Tự động nhận diện tên file trong câu ask (vd: `sửa src/app.js`) và focus đúng file đó mà không cần lệnh `/focus`.
+- ✅ **Clean Code**: Toàn bộ dự án đã được refactor thành nhiều Service/Module độc lập (Profile, UI, Chat, Prompt).
+- ✅ **Try-Catch .env**: Fix crash EPERM trong môi trường sandbox.
 - ✅ **Quota Tracking**: Phân tích log deep dive để tìm chi tiết % rate_limit dự còn trong cache JSONL.
 - ✅ **TUI Table UI**: Bảng Dashboard Menu hoàn toàn mới với layout chuyên nghiệp hơn.
 
-### v7.2 "Project-Aware Brain" (Latest)
+### v7.2 "Project-Aware Brain"
 - ✅ **Full-Access mặc định**: Không cần gõ `/write`, Codex có toàn quyền ngay khi mở chat
 - ✅ **Skip Git Repo Check**: Hoạt động ở mọi thư mục
 - ✅ **Giao diện đơn giản**: Loại bỏ các toggle không cần thiết, giữ lại `/focus`, `/no-map`, `/no-memory`

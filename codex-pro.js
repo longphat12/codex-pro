@@ -2,7 +2,7 @@
 
 /**
  * Codex-Pro CLI Tool (Zero-Dep Edition)
- * Version: 7.2 "Project-Aware Brain"
+ * Version: 7.3 "Smart Context Engine"
  */
 
 import fs from 'node:fs';

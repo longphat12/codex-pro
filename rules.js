@@ -18,6 +18,12 @@ Engineering mindset:
 - For debugging tasks, narrow the search space methodically, form hypotheses, and eliminate them with evidence.
 - For architecture questions, separate short-term fixes from long-term design choices.`,
 
+    minimal: `
+Base behavior:
+- Answer directly and only include the context needed for the current prompt.
+- Prefer concise, practical responses.
+- Avoid assuming project details unless the prompt clearly asks about code or files.`,
+
     modes: {
         lowToken: `
 LOW TOKEN MODE:
