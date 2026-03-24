@@ -23,7 +23,15 @@ coverage/
 .project-map.md
 .codex_memory.json
 
-# Codex profile runtime data
+# Active profile symlink
+.codex/
+
+# Proxy credentials
+proxies.txt
+
+# Codex profile data (auth tokens, sessions, runtime)
+.codex_profiles/*/auth.json
+.codex_profiles/*/.personality_migration
 .codex_profiles/*/sessions/
 .codex_profiles/*/shell_snapshots/
 .codex_profiles/*/tmp/
@@ -34,3 +42,4 @@ coverage/
 .codex_profiles/*/state_*.sqlite
 .codex_profiles/*/metadata.json
 .codex_profiles/*/models_cache.json
+

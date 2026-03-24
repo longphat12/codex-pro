@@ -229,7 +229,7 @@ const runCodex = async (args, silent = false, writeMode = false) => {
     let hCtx = noMemory ? "" : memoryManager.getSerialized();
     let mCtx = noMap ? "" : projectMap.getSummary(focus);
     let uP = userPrompt;
-    let sCtx = args.includes('--no-rules') ? "" : rules.global;
+    let sCtx = rules.global;
 
     if (args.includes('--low-token')) {
         sCtx += `\n${rules.modes.lowToken}`;
@@ -293,9 +293,9 @@ const runCodex = async (args, silent = false, writeMode = false) => {
             child.stdin.end(); // IMPORTANT: close stdin so codex knows no more input is coming and exits
             const timer = setTimeout(() => {
                 child.kill();
-                if (!noLog) error(`Command timed out (60s)`);
+                if (!noLog) error(`Command timed out (5min)`);
                 resolve(124);
-            }, 60000);
+            }, 300000);
 
             child.on('close', async (code) => {
                 clearTimeout(timer);
@@ -327,7 +327,6 @@ const handleChat = async () => {
     let focus = null;
     let noMap = false;
     let noMemory = false;
-    let writeMode = true;
     
     const commands = ['/focus', '/no-map', '/no-memory', '/help', '/exit', '/quit'];
     const completer = (line) => {
@@ -390,7 +389,7 @@ const handleChat = async () => {
             if (focus) { flags.push('--focus'); flags.push(focus); }
 
             rl.pause(); // Pause readline while spawned process runs
-            await runCodex([...flags, raw], true, writeMode); 
+            await runCodex([...flags, raw], true, true); 
             rl.resume();
             ask();
         });
