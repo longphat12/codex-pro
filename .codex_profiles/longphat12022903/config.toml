@@ -1,0 +1,12 @@
+model = "gpt-5.4"
+[projects."/Users/johnwick/Tool"]
+trust_level = "trusted"
+
+[projects."/Users/johnwick"]
+trust_level = "trusted"
+
+[projects."/Users/johnwick/Documents/unica"]
+trust_level = "trusted"
+
+[notice.model_migrations]
+"gpt-5.3-codex" = "gpt-5.4"
