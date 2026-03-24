@@ -1,0 +1,36 @@
+.env
+.env.*
+!.env.example
+
+# Dependency and build artifacts
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+.DS_Store
+
+# Editor/OS files
+.idea/
+.vscode/
+
+# Local project/runtime state
+.project-map.md
+.codex_memory.json
+
+# Codex profile runtime data
+.codex_profiles/*/sessions/
+.codex_profiles/*/shell_snapshots/
+.codex_profiles/*/tmp/
+.codex_profiles/*/log/
+.codex_profiles/*/*.sqlite
+.codex_profiles/*/*.sqlite-shm
+.codex_profiles/*/*.sqlite-wal
+.codex_profiles/*/state_*.sqlite
+.codex_profiles/*/metadata.json
+.codex_profiles/*/models_cache.json
