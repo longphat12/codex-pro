@@ -27,6 +27,13 @@ const HOME_CODEX = path.join(HOME, '.codex');
 const PROFILES_DIR = path.join(__dirname, '.codex_profiles');
 const SCRIPT_PATH = process.argv[1];
 
+const ensureUtf8Locale = () => {
+  const utf8Locale = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8';
+  if (!process.env.LANG || !/utf-8/i.test(process.env.LANG)) process.env.LANG = utf8Locale;
+  if (!process.env.LC_CTYPE || !/utf-8/i.test(process.env.LC_CTYPE)) process.env.LC_CTYPE = utf8Locale;
+  if (!process.env.LC_ALL || !/utf-8/i.test(process.env.LC_ALL)) process.env.LC_ALL = utf8Locale;
+};
+
 // --- Manual Dotenv Loader ---
 const loadEnv = () => {
   const envPath = path.join(__dirname, '.env');
@@ -41,6 +48,7 @@ const loadEnv = () => {
   }
 };
 loadEnv();
+ensureUtf8Locale();
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', green: '\x1b[32m', red: '\x1b[31m',
@@ -226,30 +234,95 @@ const formatQuotaDetails = (rateLimits) => {
     return `Quota: ${details.join(' | ')} | ${plan}`;
 };
 
-const switchProfile = (name) => {
-    const profilePath = path.join(PROFILES_DIR, name);
+const getActiveProfileName = () => {
+    for (const linkPath of [CODEX_DIR, HOME_CODEX]) {
+        try {
+            const stats = fs.lstatSync(linkPath);
+            if (!stats.isSymbolicLink()) continue;
+            const target = fs.readlinkSync(linkPath);
+            return path.basename(target);
+        } catch {}
+    }
+    return null;
+};
+
+const syncProfileLink = (linkPath, profilePath) => {
     try {
-        if (fs.lstatSync(CODEX_DIR)) fs.unlinkSync(CODEX_DIR);
-    } catch {}
-    try {
-        const stats = fs.lstatSync(HOME_CODEX);
+        const stats = fs.lstatSync(linkPath);
         if (stats.isSymbolicLink()) {
-            fs.unlinkSync(HOME_CODEX);
+            fs.unlinkSync(linkPath);
         } else if (stats.isDirectory()) {
-            // Safe migration: move real directory to a special profile
-            const recoveredName = `recovered_session_${Date.now()}`;
-            const recoveredPath = path.join(PROFILES_DIR, recoveredName);
-            if (!fs.existsSync(PROFILES_DIR)) fs.mkdirSync(PROFILES_DIR, { recursive: true });
-            fs.renameSync(HOME_CODEX, recoveredPath);
-            saveProfileData(recoveredName, { usageCount: 0, status: 'Recovered' });
-            success(`Migrated existing ~/.codex to profile [${recoveredName}]`);
+            if (linkPath === HOME_CODEX) {
+                const recoveredName = `recovered_session_${Date.now()}`;
+                const recoveredPath = path.join(PROFILES_DIR, recoveredName);
+                if (!fs.existsSync(PROFILES_DIR)) fs.mkdirSync(PROFILES_DIR, { recursive: true });
+                fs.renameSync(linkPath, recoveredPath);
+                saveProfileData(recoveredName, { usageCount: 0, status: 'Recovered' });
+                success(`Migrated existing ~/.codex to profile [${recoveredName}]`);
+            } else {
+                fs.rmSync(linkPath, { recursive: true, force: true });
+            }
+        } else {
+            fs.rmSync(linkPath, { force: true });
         }
     } catch {}
-    
-    fs.symlinkSync(profilePath, CODEX_DIR, 'dir');
-    if (!fs.existsSync(HOME_CODEX)) {
-        try { fs.symlinkSync(profilePath, HOME_CODEX, 'dir'); } catch {}
+
+    fs.symlinkSync(profilePath, linkPath, 'dir');
+};
+
+const printQuotaReport = (name, rateLimits) => {
+    const title = name ? `[${name}] ` : '';
+    if (!rateLimits) {
+        log(`${title}Quota: No recent data`);
+        return;
     }
+
+    log(`${title}${formatQuotaDetails(rateLimits)}`);
+};
+
+const refreshQuotaSnapshot = async (name, silent = false) => {
+    if (!name) return null;
+
+    const previousActive = getActiveProfileName();
+
+    try {
+        switchProfile(name);
+    } catch (err) {
+        if (!silent) error(`Failed to switch profile for quota refresh: ${err.message}`);
+        return getLatestQuotaSnapshot(name);
+    }
+
+    try {
+        const child = spawnSync(
+            'codex',
+            ['exec', '--skip-git-repo-check', 'Reply with exactly: OK'],
+            {
+                stdio: silent ? 'ignore' : 'inherit',
+                env: process.env,
+                cwd: __dirname,
+                timeout: 45000
+            }
+        );
+
+        if (child.error && !silent) {
+            error(`Quota refresh failed: ${child.error.message}`);
+        }
+    } finally {
+        if (previousActive && previousActive !== name) {
+            try {
+                switchProfile(previousActive);
+            } catch {}
+        }
+    }
+
+    return getLatestQuotaSnapshot(name);
+};
+
+const switchProfile = (name) => {
+    const profilePath = path.join(PROFILES_DIR, name);
+
+    syncProfileLink(CODEX_DIR, profilePath);
+    syncProfileLink(HOME_CODEX, profilePath);
     const d = getProfileData(name);
     process.env.HTTP_PROXY = d.proxy || ''; process.env.HTTPS_PROXY = d.proxy || ''; process.env.ALL_PROXY = d.proxy || '';
     return true;
@@ -297,13 +370,15 @@ const handleMenu = async () => {
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
+    let onData;
     const cleanup = () => {
+        if (onData) process.stdin.off('data', onData);
         process.stdin.setRawMode(false);
         process.stdin.pause();
     };
 
     return new Promise((resolve) => {
-        process.stdin.on('data', async (key) => {
+        onData = async (key) => {
             if (key === '\u001b[A') { index = (index - 1 + profiles.length) % profiles.length; renderMenu(profiles, index, activeName); }
             else if (key === '\u001b[B') { index = (index + 1) % profiles.length; renderMenu(profiles, index, activeName); }
             else if (key === '\r') { cleanup(); switchProfile(profiles[index].name); success(`Activated: ${profiles[index].name}`); resolve(); }
@@ -319,7 +394,8 @@ const handleMenu = async () => {
                     rl.close(); resolve();
                 });
             }
-        });
+        };
+        process.stdin.on('data', onData);
     });
 };
 
@@ -455,70 +531,108 @@ const handleChat = async () => {
         return [hits.length ? hits : commands, line];
     };
 
-    const rl = readline.createInterface({ 
-        input: process.stdin, 
-        output: process.stdout,
-        completer: completer 
-    });
-
     const isHome = process.cwd() === homedir();
-
-    const ask = () => {
-        let curr = "No Profile";
+    const getCurrentProfile = () => {
+        let curr = 'No Profile';
         try {
             if (fs.existsSync(CODEX_DIR) && fs.lstatSync(CODEX_DIR).isSymbolicLink()) {
                 curr = path.basename(fs.readlinkSync(CODEX_DIR));
             }
         } catch {}
-
-        let statusLine = `${C.dim}[${focus || (isHome ? 'Home-Warning ⚠️' : 'Full Scan')}]${noMap?' [No Map]':''}${noMemory?' [No Hist]':''} [Free] [Write]${C.reset}`;
-        if (isHome && !focus && !noMap) {
-            log(`${C.yellow}⚠️ Warning: Scanning Home Directory. Use /focus to save tokens.${C.reset}`);
-        }
-        process.stdout.write('\n');
-        rl.question(`${C.bold}${C.cyan}Chat [${curr}] ${statusLine} > ${C.reset}`, async (input) => {
-            const raw = input.trim();
-            if (!raw) { ask(); return; }
-            const lower = raw.toLowerCase();
-            
-            if (['exit', 'q', 'quit'].includes(lower)) { rl.close(); return; }
-            
-            if (raw.startsWith('/')) {
-                const [cmd, ...args] = raw.substring(1).split(' ');
-                if (cmd === 'focus') { 
-                    focus = args[0] || null;
-                    const msg = focus ? `Focus set to: ${focus.split(',').join(' & ')}` : 'Focus reset to Full Scan';
-                    success(msg);
-                } else if (cmd === 'no-map') {
-                    noMap = !noMap;
-                    success(`Project Map: ${noMap ? 'OFF' : 'ON'}`);
-                } else if (cmd === 'no-memory') {
-                    noMemory = !noMemory;
-                    success(`Chat History: ${noMemory ? 'OFF' : 'ON'}`);
-                } else if (cmd === 'help') {
-                    log(`${C.yellow}Chat Commands: /focus <kd>, /no-map, /no-memory, /help, /exit${C.reset}`);
-                } else {
-                    error(`Unknown command: ${cmd}`);
-                }
-                ask();
-                return;
-            }
-
-            const flags = [];
-            if (noMap) flags.push('--no-map');
-            if (noMemory) flags.push('--no-memory');
-            if (focus) { flags.push('--focus'); flags.push(focus); }
-
-            rl.pause(); // Pause readline while spawned process runs
-            await runCodex([...flags, raw], true, true); 
-            rl.resume();
-            ask();
-        });
+        return curr;
     };
+
+    const renderHeader = () => {
+        const curr = getCurrentProfile();
+        const scopeLabel = focus || (isHome ? 'Home-Warning' : 'Full Scan');
+        const statusLine = `${C.dim}[${scopeLabel}]${noMap?' [No Map]':''}${noMemory?' [No Hist]':''} [Free] [Write]${C.reset}`;
+        process.stdout.write(`\n${C.bold}${C.cyan}Chat [${curr}]${C.reset} ${statusLine}\n`);
+        if (isHome && !focus && !noMap) {
+            log(`${C.yellow}Warning: Scanning Home Directory. Use /focus to save tokens.${C.reset}`);
+        }
+        rl.setPrompt(`Chat [${curr}] > `);
+    };
+
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: true,
+        historySize: 200,
+        removeHistoryDuplicates: true,
+        escapeCodeTimeout: 500,
+        completer: completer
+    });
+
+    const promptNext = () => {
+        renderHeader();
+        rl.prompt();
+    };
+
+    rl.on('SIGINT', () => {
+        process.stdout.write('\n');
+        rl.close();
+    });
+
+    rl.on('close', () => {
+        process.stdout.write('\n');
+    });
+
+    rl.on('line', async (input) => {
+        const raw = input.trim();
+        if (!raw) {
+            promptNext();
+            return;
+        }
+
+        const lower = raw.toLowerCase();
+        if (['exit', 'q', 'quit', '/exit', '/quit'].includes(lower)) {
+            rl.close();
+            return;
+        }
+
+        if (raw.startsWith('/')) {
+            const [cmd, ...args] = raw.substring(1).split(' ');
+            if (cmd === 'focus') {
+                focus = args[0] || null;
+                const msg = focus ? `Focus set to: ${focus.split(',').join(' & ')}` : 'Focus reset to Full Scan';
+                success(msg);
+            } else if (cmd === 'no-map') {
+                noMap = !noMap;
+                success(`Project Map: ${noMap ? 'OFF' : 'ON'}`);
+            } else if (cmd === 'no-memory') {
+                noMemory = !noMemory;
+                success(`Chat History: ${noMemory ? 'OFF' : 'ON'}`);
+            } else if (cmd === 'help') {
+                log(`${C.yellow}Chat Commands: /focus <kd>, /no-map, /no-memory, /help, /exit${C.reset}`);
+            } else {
+                error(`Unknown command: ${cmd}`);
+            }
+            promptNext();
+            return;
+        }
+
+        const flags = [];
+        if (noMap) flags.push('--no-map');
+        if (noMemory) flags.push('--no-memory');
+        if (focus) {
+            flags.push('--focus');
+            flags.push(focus);
+        }
+
+        rl.pause();
+        process.stdin.pause();
+        try {
+            await runCodex([...flags, raw], true, true);
+        } finally {
+            process.stdin.resume();
+            rl.resume();
+            promptNext();
+        }
+    });
 
     log(`\n${C.bold}${C.green}--- Codex-Pro v7.2 Stealth Chat ---${C.reset}`);
     log(`${C.dim}Tip: Type / and press Tab for command suggestions. /help for more.${C.reset}\n`);
-    ask();
+    promptNext();
 };
 
 // --- CLI ENTRY ---
@@ -529,6 +643,33 @@ switch (command) {
   case 'run': await runCodex(args.slice(1), false, true); break;
   case 'chat': await handleChat(); break;
   case 'menu': await handleMenu(); break;
+  case 'quota':
+    if (args[1] === '--all') {
+        const profiles = listProfiles();
+        if (profiles.length === 0) {
+            error('No profiles found.');
+            break;
+        }
+        profiles.forEach((profile) => {
+            printQuotaReport(profile.name, getLatestQuotaSnapshot(profile.name));
+        });
+        break;
+    }
+
+    {
+        const target = args[1] || getActiveProfileName();
+        if (!target) {
+            error('No active profile.');
+            break;
+        }
+        let snapshot = getLatestQuotaSnapshot(target);
+        if (!snapshot) {
+            log(`${C.dim}No cached quota snapshot for [${target}]. Refreshing once...${C.reset}`);
+            snapshot = await refreshQuotaSnapshot(target, true);
+        }
+        printQuotaReport(target, snapshot);
+    }
+    break;
   case 'login':
     if (fs.existsSync(CODEX_DIR) && fs.lstatSync(CODEX_DIR).isSymbolicLink()) fs.unlinkSync(CODEX_DIR);
     try {
@@ -536,7 +677,7 @@ switch (command) {
     } catch {}
     spawnSync('codex', ['login'], { stdio: 'inherit', cwd: __dirname });
     const rlL = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rlL.question(`Name to save: `, (n) => {
+    rlL.question(`Name to save: `, async (n) => {
         const name = n.trim();
         if (!name) { rlL.close(); return; }
         if (!fs.existsSync(PROFILES_DIR)) fs.mkdirSync(PROFILES_DIR, { recursive: true });
@@ -559,6 +700,9 @@ switch (command) {
             switchProfile(name); // This will link both as symlinks
             saveProfileData(name, { usageCount: 0 });
             success(`Saved [${name}] from ${source}.`);
+            log(`${C.dim}Refreshing quota snapshot for [${name}]...${C.reset}`);
+            const snapshot = await refreshQuotaSnapshot(name, true);
+            printQuotaReport(name, snapshot);
         } else {
             error(`No new .codex directory found in project or home after login.`);
         }
@@ -617,6 +761,6 @@ switch (command) {
     break;
 
   default:
-    log(`Codex-Pro v7.2 | run, menu, chat, login, set-proxy, health, init, memory`);
+    log(`Codex-Pro v7.2 | run, menu, chat, quota, login, set-proxy, health, init, memory`);
     log(`Options: --no-log, --no-map, --no-memory, --focus <keyword>`);
 }

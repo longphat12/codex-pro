@@ -52,6 +52,12 @@ Không cần `npm install` — dự án **Zero-Dep**, chỉ dùng module Node.js
 cx                    # hoặc cpm, cxm
 # Menu sẽ hiển thị quota còn lại theo snapshot gần nhất của từng profile
 
+# Kiểm tra quota profile đang active
+cx quota
+
+# Kiểm tra quota tất cả profile
+cx quota --all
+
 # Đăng nhập & lưu tài khoản mới
 cpl
 
@@ -126,6 +132,11 @@ Chat [longphat200205] [Full Scan] [Free] [Write] >
 | `/no-memory` | Bật/tắt lịch sử hội thoại |
 | `/help` | Hiển thị danh sách lệnh |
 | `/exit` hoặc `q` | Thoát chat |
+
+### Hỗ trợ tiếng Việt
+
+- Chat mode dùng `readline` dạng session bền vững thay vì tạo prompt mới cho từng câu, giúp giảm lỗi IME khi gõ tiếng Việt nhiều lần.
+- CLI tự ép locale UTF-8 (`LANG`, `LC_CTYPE`, `LC_ALL`) khi môi trường hiện tại chưa cấu hình đúng mã hóa.
 
 ---
 
