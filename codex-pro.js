@@ -110,6 +110,122 @@ const listProfiles = () => {
       .map(name => ({ name, ...getProfileData(name) }));
 };
 
+const getSessionFiles = (dir) => {
+    const files = [];
+    if (!fs.existsSync(dir)) return files;
+
+    const walk = (current) => {
+        let entries = [];
+        try {
+            entries = fs.readdirSync(current, { withFileTypes: true });
+        } catch {
+            return;
+        }
+
+        for (const entry of entries) {
+            const fullPath = path.join(current, entry.name);
+            if (entry.isDirectory()) {
+                walk(fullPath);
+            } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+                files.push(fullPath);
+            }
+        }
+    };
+
+    walk(dir);
+    return files;
+};
+
+const getLatestQuotaSnapshot = (name) => {
+    const sessionsDir = path.join(PROFILES_DIR, name, 'sessions');
+    const sessionFiles = getSessionFiles(sessionsDir)
+      .sort((a, b) => {
+          try {
+              return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+          } catch {
+              return 0;
+          }
+      });
+
+    for (const file of sessionFiles) {
+        try {
+            const lines = fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean);
+            for (let i = lines.length - 1; i >= 0; i--) {
+                const parsed = JSON.parse(lines[i]);
+                const rateLimits = parsed?.payload?.rate_limits;
+                if (rateLimits?.primary || rateLimits?.secondary) {
+                    return rateLimits;
+                }
+            }
+        } catch {}
+    }
+
+    return null;
+};
+
+const getRemainingPercent = (limit) => {
+    if (!limit || typeof limit.used_percent !== 'number') return null;
+    return Math.max(0, Math.min(100, Math.round(100 - limit.used_percent)));
+};
+
+const formatWindowLabel = (minutes) => {
+    if (minutes === 300) return '5h';
+    if (minutes === 10080) return '7d';
+    if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+    if (minutes % 60 === 0) return `${minutes / 60}h`;
+    return `${minutes}m`;
+};
+
+const formatTimeUntilReset = (unixSeconds) => {
+    if (!unixSeconds) return 'unknown';
+    const diffMs = (unixSeconds * 1000) - Date.now();
+    if (diffMs <= 0) return 'now';
+
+    const totalMinutes = Math.ceil(diffMs / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+};
+
+const formatQuotaItem = (label, limit) => {
+    if (!limit) return `${label}:--`;
+    const remaining = getRemainingPercent(limit);
+    if (remaining === null) return `${label}:--`;
+    return `${label}:${String(remaining).padStart(2, ' ')}%`;
+};
+
+const formatQuotaSummary = (rateLimits) => {
+    if (!rateLimits) return 'No data';
+    const primaryLabel = formatWindowLabel(rateLimits.primary?.window_minutes);
+    const secondaryLabel = formatWindowLabel(rateLimits.secondary?.window_minutes);
+    const parts = [formatQuotaItem(primaryLabel, rateLimits.primary)];
+    if (rateLimits.secondary) parts.push(formatQuotaItem(secondaryLabel, rateLimits.secondary));
+    return parts.join(' ');
+};
+
+const formatQuotaDetails = (rateLimits) => {
+    if (!rateLimits) return 'Quota: No recent data';
+
+    const details = [];
+    if (rateLimits.primary) {
+        details.push(
+          `${formatWindowLabel(rateLimits.primary.window_minutes)} còn ${getRemainingPercent(rateLimits.primary)}% · reset sau ${formatTimeUntilReset(rateLimits.primary.resets_at)}`
+        );
+    }
+    if (rateLimits.secondary) {
+        details.push(
+          `${formatWindowLabel(rateLimits.secondary.window_minutes)} còn ${getRemainingPercent(rateLimits.secondary)}% · reset sau ${formatTimeUntilReset(rateLimits.secondary.resets_at)}`
+        );
+    }
+
+    const plan = rateLimits.plan_type ? `Plan: ${rateLimits.plan_type}` : 'Plan: unknown';
+    return `Quota: ${details.join(' | ')} | ${plan}`;
+};
+
 const switchProfile = (name) => {
     const profilePath = path.join(PROFILES_DIR, name);
     try {
@@ -146,23 +262,28 @@ const renderMenu = (profiles, index, activeName) => {
     
     process.stdout.write(`\n ${C.bold}${C.cyan}--- Codex-Pro v7.2 (Project-Aware Brain) ---${C.reset}\n`);
     process.stdout.write(` ${C.dim}Arrows: Move | Enter: Select | q: Quit${C.reset}\n\n`);
-    process.stdout.write(`   ${C.dim}${'Profile'.padEnd(16)} Usage    Proxy${C.reset}\n`);
+    process.stdout.write(`   ${C.dim}${'Profile'.padEnd(16)} ${'Usage'.padEnd(8)} ${'Proxy'.padEnd(6)} Quota${C.reset}\n`);
     
     profiles.forEach((p, i) => {
         const isSelected = i === index;
         const isActive = p.name === activeName;
         const prefix = isSelected ? `${C.cyan}${C.bold} > ${C.reset}` : '   ';
-        let line = `${p.name.padEnd(16)} ${String(p.usageCount).padEnd(8)} ${p.proxy ? 'Yes' : 'No'}`;
+        let line = `${p.name.padEnd(16)} ${String(p.usageCount).padEnd(8)} ${String(p.proxy ? 'Yes' : 'No').padEnd(6)} ${formatQuotaSummary(p.rateLimits)}`;
         if (isActive) line = `${C.green}${line} (Active)${C.reset}`;
         if (isSelected) process.stdout.write(`${prefix}${C.bgBlue}${C.white}${C.bold} ${line} ${C.reset}\n`);
         else process.stdout.write(`${prefix}${line}\n`);
     });
 
+    const selected = profiles[index];
+    process.stdout.write(`\n ${C.dim}${formatQuotaDetails(selected?.rateLimits)}${C.reset}\n`);
     process.stdout.write(`\n ${C.bold}c)${C.reset} Chat  ${C.bold}i)${C.reset} Check IP  ${C.bold}d)${C.reset} Delete  ${C.bold}q)${C.reset} Quit\n`);
 };
 
 const handleMenu = async () => {
-    const profiles = listProfiles();
+    const profiles = listProfiles().map((profile) => ({
+        ...profile,
+        rateLimits: getLatestQuotaSnapshot(profile.name)
+    }));
     if (profiles.length === 0) { log('No profiles. Run cpl to add.'); return; }
     
     let activeName = '';

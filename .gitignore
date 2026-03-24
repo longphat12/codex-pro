@@ -29,17 +29,6 @@ coverage/
 # Proxy credentials
 proxies.txt
 
-# Codex profile data (auth tokens, sessions, runtime)
-.codex_profiles/*/auth.json
-.codex_profiles/*/.personality_migration
-.codex_profiles/*/sessions/
-.codex_profiles/*/shell_snapshots/
-.codex_profiles/*/tmp/
-.codex_profiles/*/log/
-.codex_profiles/*/*.sqlite
-.codex_profiles/*/*.sqlite-shm
-.codex_profiles/*/*.sqlite-wal
-.codex_profiles/*/state_*.sqlite
-.codex_profiles/*/metadata.json
-.codex_profiles/*/models_cache.json
+# Codex profile data (auth tokens, sessions, runtime — all per-machine)
+.codex_profiles/
 

@@ -1,6 +1,0 @@
-2026-03-20T07:34:48.491589Z  INFO codex_cli::login: starting browser login flow
-2026-03-20T07:34:59.391351Z  INFO codex_login::server: received login callback path=/auth/callback has_code=true has_state=true has_error=false state_valid=true
-2026-03-20T07:34:59.391449Z  INFO codex_client::custom_ca: using system root certificates because no CA override environment variable was selected codex_ca_certificate_configured=false ssl_cert_file_configured=false
-2026-03-20T07:34:59.393533Z  INFO codex_login::server: starting oauth token exchange issuer=https://auth.openai.com/ redirect_uri=http://localhost:1455/auth/callback
-2026-03-20T07:34:59.839106Z  INFO codex_login::server: oauth token exchange succeeded status=200 OK
-2026-03-20T07:34:59.839155Z  INFO codex_client::custom_ca: using system root certificates because no CA override environment variable was selected codex_ca_certificate_configured=false ssl_cert_file_configured=false

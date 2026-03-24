@@ -50,6 +50,7 @@ Không cần `npm install` — dự án **Zero-Dep**, chỉ dùng module Node.js
 ```bash
 # Mở bảng điều khiển (TUI menu)
 cx                    # hoặc cpm, cxm
+# Menu sẽ hiển thị quota còn lại theo snapshot gần nhất của từng profile
 
 # Đăng nhập & lưu tài khoản mới
 cpl
