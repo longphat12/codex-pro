@@ -145,20 +145,22 @@ Chat [longphat200205] [Full Scan] [Free] [Write] >
 ```
 Tool/
 ├── codex-pro.js        # 🧠 Core orchestrator: parse lệnh, gọi service/UI
+├── chatService.js      # 💬 Logic gọi Codex engine và luồng Chat REPL
+├── cliPrompts.js       # 🗣️ Utils bọc readline xử lý input Promise
 ├── behavior.js         # ⏱️ Delay engine: mô phỏng hành vi người dùng (2-15s)
 ├── cryptoHelper.js     # 🔐 Mã hóa AES-256-GCM cho metadata & memory
 ├── fingerprint.js      # 🎭 Tạo User-Agent & headers ngẫu nhiên
 ├── healthCheck.js      # 🏥 Phát hiện shadow ban, rate limit, session hết hạn
-├── memoryManager.js    # 💾 Lưu trữ 5 hội thoại gần nhất (mã hóa)
-├── profileManager.js   # 👤 Logic profile, symlink, quota snapshot, metadata
+├── memoryManager.js    # 💾 Lưu trữ hội thoại gần nhất (mã hóa)
+├── profileManager.js   # 👤 Logic file IO profile, symlink, phân tích quota
 ├── projectMap.js       # 🗺️ Quét & tạo cây thư mục project cho context
 ├── proxyManager.js     # 🌐 Quản lý pool proxy (random/round-robin)
-├── rules.js            # 📏 System prompt tùy chỉnh cho AI
-├── terminalUI.js       # 🖥️ Màu sắc, log, bảng menu TUI, brand LONG PHÁT
+├── rules.js            # 📏 System prompt tùy chỉnh cho bot
+├── terminalUI.js       # 🖥️ TUI Menu renderer, text formatter, mã màu
 ├── proxies.txt         # 📝 Danh sách proxy (1 proxy/dòng)
 ├── .env                # 🔑 Biến môi trường (CODEX_KEY, etc.)
 └── .codex_profiles/    # 👤 Thư mục chứa tất cả profile tài khoản
-    ├── longphat200205/
+    ├── longphat.../
     │   ├── auth.json
     │   └── metadata.json (encrypted)
     └── .../
@@ -168,6 +170,10 @@ Tool/
 
 | Module | Chức năng chính |
 |--------|----------------|
+| **chatService.js** | Tách riêng phần tương tác với CLI con (spawn `codex`) và vòng lặp Chat (REPL readline). |
+| **cliPrompts.js** | Chuyển đổi event-driven của `readline` API cũ thành dạng Promise tiện dụng (`await askQuestion`). |
+| **profileManager.js** | Thao tác IO liên quan tới Profile — thay vì để logic rải rác, giờ đây quản lý symlink hay parse logs Quota (rate_limits JSONL) đều tập trung ở đây. |
+| **terminalUI.js** | Giữ mã ANSI màu mè ra xa khỏi nghiệp vụ cốt lõi. Cân lề tự động, vẽ bảng đẹp, hiển thị chữ LONG PHÁT chớp nháy. |
 | **behavior.js** | Tạo delay ngẫu nhiên theo phân phối chuẩn (2-15s) giữa các request. Hỗ trợ xoay vòng dựa trên ngưỡng sử dụng (5-12 lần). |
 | **cryptoHelper.js** | Mã hóa/giải mã AES-256-GCM. Key lấy từ `CODEX_KEY` env hoặc dùng key mặc định. |
 | **fingerprint.js** | Pool 10+ User-Agent thực (Chrome, Firefox, Safari, Edge, Opera). Tự tạo headers `Sec-CH-UA` phù hợp. |
@@ -175,7 +181,7 @@ Tool/
 | **memoryManager.js** | Lưu 5 exchanges gần nhất, inject 3 exchanges cuối vào prompt. Dữ liệu mã hóa trên disk. |
 | **projectMap.js** | Quét cây thư mục (depth 1), lọc `node_modules`, `dist`, `.DS_Store`... Hỗ trợ focus filter theo keyword. |
 | **proxyManager.js** | Đọc `proxies.txt`, hỗ trợ strategy `random` hoặc `round-robin`. Kiểm tra proxy sống bằng `curl ifconfig.me`. |
-| **rules.js** | System prompt mặc định: ưu tiên intent người dùng, phản hồi như một kỹ sư thực dụng, bám root-cause và trade-off. |
+| **rules.js** | System prompt mặc định: ưu tiên intent người dùng, phản hồi như một kỹ sư thực dụng. |
 
 ---
 
@@ -298,6 +304,12 @@ Actions    -> [c] Chat | [i] Check IP | [d] Delete | [q] Quit
 ---
 
 ## 📝 Changelog
+
+### v7.3 "Modular Architecture Refactor"
+- ✅ **Clean Code**: Thay vì 1 file khổng lồ, toàn bộ dự án đã được refactor thành nhiều Service/Module độc lập (Profile, UI, Chat, Prompt).
+- ✅ **Try-Catch .env**: Fix crash EPERM khó chịu khi dùng trong môi trường sandbox khắt khe.
+- ✅ **Quota Tracking**: Phân tích log deep dive để tìm chi tiết % rate_limit dự còn trong cache JSONL.
+- ✅ **TUI Table UI**: Bảng Dashboard Menu hoàn toàn mới với layout chuyên nghiệp hơn.
 
 ### v7.2 "Project-Aware Brain" (Latest)
 - ✅ **Full-Access mặc định**: Không cần gõ `/write`, Codex có toàn quyền ngay khi mở chat
