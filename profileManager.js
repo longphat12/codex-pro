@@ -51,13 +51,14 @@ export const getProfileData = (name) => {
       }
     }
   }
-  return { usageCount: 0, quota: '???', status: 'Ready', proxy: null, lastProxy: null };
+  return { usageCount: 0, status: 'Ready', proxy: null, lastProxy: null };
 };
 
 export const listProfiles = () => {
   if (!fs.existsSync(paths.profilesDir)) return [];
   return fs.readdirSync(paths.profilesDir)
     .filter((entry) => {
+      if (entry.includes('.bak-')) return false;
       try {
         return fs.statSync(path.join(paths.profilesDir, entry)).isDirectory();
       } catch {
@@ -164,12 +165,12 @@ export const formatQuotaDetails = (rateLimits) => {
   const details = [];
   if (rateLimits.primary) {
     details.push(
-      `${formatWindowLabel(rateLimits.primary.window_minutes)} còn ${getRemainingPercent(rateLimits.primary)}% · reset sau ${formatTimeUntilReset(rateLimits.primary.resets_at)}`
+      `${formatWindowLabel(rateLimits.primary.window_minutes)} ${getRemainingPercent(rateLimits.primary)}% left · resets in ${formatTimeUntilReset(rateLimits.primary.resets_at)}`
     );
   }
   if (rateLimits.secondary) {
     details.push(
-      `${formatWindowLabel(rateLimits.secondary.window_minutes)} còn ${getRemainingPercent(rateLimits.secondary)}% · reset sau ${formatTimeUntilReset(rateLimits.secondary.resets_at)}`
+      `${formatWindowLabel(rateLimits.secondary.window_minutes)} ${getRemainingPercent(rateLimits.secondary)}% left · resets in ${formatTimeUntilReset(rateLimits.secondary.resets_at)}`
     );
   }
 
@@ -189,27 +190,45 @@ export const getActiveProfileName = () => {
 };
 
 const syncProfileLink = (linkPath, profilePath) => {
-  try {
-    const stats = fs.lstatSync(linkPath);
-    if (stats.isSymbolicLink()) {
-      fs.unlinkSync(linkPath);
-    } else if (stats.isDirectory()) {
-      if (linkPath === paths.homeCodex) {
-        const recoveredName = `recovered_session_${Date.now()}`;
-        const recoveredPath = path.join(paths.profilesDir, recoveredName);
-        if (!fs.existsSync(paths.profilesDir)) fs.mkdirSync(paths.profilesDir, { recursive: true });
-        fs.renameSync(linkPath, recoveredPath);
-        saveProfileData(recoveredName, { usageCount: 0, status: 'Recovered' });
-        success(`Migrated existing ~/.codex to profile [${recoveredName}]`);
-      } else {
-        fs.rmSync(linkPath, { recursive: true, force: true });
-      }
-    } else {
-      fs.rmSync(linkPath, { force: true });
-    }
-  } catch {}
+  let stats = null;
 
-  fs.symlinkSync(profilePath, linkPath, 'dir');
+  try {
+    stats = fs.lstatSync(linkPath);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+
+  if (stats?.isSymbolicLink()) {
+    const currentTarget = fs.readlinkSync(linkPath);
+    if (path.resolve(path.dirname(linkPath), currentTarget) === path.resolve(profilePath)) return;
+    fs.unlinkSync(linkPath);
+  } else if (stats?.isDirectory()) {
+    if (linkPath === paths.homeCodex) {
+      const recoveredName = `recovered_session_${Date.now()}`;
+      const recoveredPath = path.join(paths.profilesDir, recoveredName);
+      if (!fs.existsSync(paths.profilesDir)) fs.mkdirSync(paths.profilesDir, { recursive: true });
+      fs.renameSync(linkPath, recoveredPath);
+      saveProfileData(recoveredName, { usageCount: 0, status: 'Recovered' });
+      success(`Migrated existing ~/.codex to profile [${recoveredName}]`);
+    } else {
+      fs.rmSync(linkPath, { recursive: true, force: true });
+    }
+  } else if (stats) {
+    fs.rmSync(linkPath, { recursive: true, force: true });
+  }
+
+  try {
+    fs.symlinkSync(profilePath, linkPath, 'dir');
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      const currentStats = fs.lstatSync(linkPath);
+      if (currentStats.isSymbolicLink()) {
+        const currentTarget = fs.readlinkSync(linkPath);
+        if (path.resolve(path.dirname(linkPath), currentTarget) === path.resolve(profilePath)) return;
+      }
+    }
+    throw err;
+  }
 };
 
 export const switchProfile = (name) => {

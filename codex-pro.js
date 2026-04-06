@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * Codex-Pro CLI Tool (Zero-Dep Edition)
- * Version: 7.3 "Smart Context Engine"
+ * Codex-Pro CLI Tool
+ * Version: 7.4
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, execSync, spawnSync } from 'node:child_process';
-import { homedir } from 'node:os';
+import { execSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { proxyManager } from './proxyManager.js';
 import { behavior } from './behavior.js';
 import { healthCheck } from './healthCheck.js';
-import { fingerprint } from './fingerprint.js';
 import { memoryManager } from './memoryManager.js';
 import { projectMap } from './projectMap.js';
-import { rules } from './rules.js';
 import { askQuestion, confirmAction } from './cliPrompts.js';
 import { runCodex, handleChat } from './chatService.js';
 import { C, error, log, renderMenu, success } from './terminalUI.js';
@@ -35,8 +31,6 @@ import {
 } from './profileManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const HOME = homedir();
-const SCRIPT_PATH = process.argv[1];
 
 const ensureUtf8Locale = () => {
   const utf8Locale = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8';
@@ -64,6 +58,24 @@ const loadEnv = () => {
 };
 loadEnv();
 ensureUtf8Locale();
+
+const runCheckIp = () => {
+    try {
+        const activeProfile = getActiveProfileName();
+        if (!activeProfile) {
+            error('No active profile.');
+            return;
+        }
+
+        const profileData = getProfileData(activeProfile);
+        log(`Checking [${activeProfile}]...`);
+        const proxyFlag = profileData.proxy ? `-x ${profileData.proxy}` : '';
+        const output = execSync(`curl -s --connect-timeout 5 ${proxyFlag} ifconfig.me`).toString().trim();
+        success(`IP: ${C.bold}${output}`);
+    } catch {
+        error('IP check failed.');
+    }
+};
 
 const handleMenu = async () => {
     const profiles = listProfiles().map((profile) => ({
@@ -106,14 +118,55 @@ const handleMenu = async () => {
     const checkIp = () => {
         cleanup();
         process.stdout.write('\n');
-        spawnSync('node', [SCRIPT_PATH, 'check-ip'], { stdio: 'inherit', cwd: __dirname });
+        runCheckIp();
     };
     const confirmDeleteSelectedProfile = async () => {
         const selectedProfile = getSelectedProfile();
         cleanup();
         process.stdout.write('\n');
         const confirmed = await confirmAction(`Confirm delete [${selectedProfile.name}]? (y/n): `);
-        if (confirmed) execSync(`rm -rf "${path.join(paths.profilesDir, selectedProfile.name)}"`);
+        if (confirmed) fs.rmSync(path.join(paths.profilesDir, selectedProfile.name), { recursive: true, force: true });
+    };
+    const reLoginSelectedProfile = async () => {
+        const selectedProfile = getSelectedProfile();
+        const name = selectedProfile.name;
+        cleanup();
+        process.stdout.write('\n');
+        
+        const confirmed = await confirmAction(`Re-login for [${name}]? (y/n): `);
+        if (!confirmed) return;
+
+        // Unlink existing symlinks to allow fresh login
+        if (fs.existsSync(paths.codexDir) && fs.lstatSync(paths.codexDir).isSymbolicLink()) fs.unlinkSync(paths.codexDir);
+        try {
+            if (fs.lstatSync(paths.homeCodex).isSymbolicLink()) fs.unlinkSync(paths.homeCodex);
+        } catch {}
+
+        log(`Triggering codex login for [${name}]...`);
+        spawnSync('codex', ['login'], { stdio: 'inherit', cwd: __dirname });
+
+        let source = null;
+        if (fs.existsSync(paths.codexDir) && !fs.lstatSync(paths.codexDir).isSymbolicLink()) source = paths.codexDir;
+        else if (fs.existsSync(paths.homeCodex) && !fs.lstatSync(paths.homeCodex).isSymbolicLink()) source = paths.homeCodex;
+
+        if (source) {
+            const targetPath = path.join(paths.profilesDir, name);
+            // Replace old data
+            if (fs.existsSync(targetPath)) fs.rmSync(targetPath, { recursive: true, force: true });
+            
+            // Move new content to profile
+            fs.renameSync(source, targetPath);
+            switchProfile(name);
+            success(`Profile [${name}] re-authenticated.`);
+            
+            log(`${C.dim}Refreshing quota snapshot for [${name}]...${C.reset}`);
+            const snapshot = await refreshQuotaSnapshot(name, true);
+            printQuotaReport(name, snapshot);
+        } else {
+            error(`Re-login failed: No new .codex directory found.`);
+            // Restore links to previous state if possible
+            switchProfile(name);
+        }
     };
     const blinkTimer = setInterval(() => {
         blinkOn = !blinkOn;
@@ -128,6 +181,7 @@ const handleMenu = async () => {
             else if (key === 'q' || key === '\u0003') { cleanup(); resolve(); }
             else if (key === 'c') { await openChat(); resolve(); }
             else if (key === 'i') { checkIp(); resolve(); }
+            else if (key === 'l') { await reLoginSelectedProfile(); resolve(); }
             else if (key === 'd') { await confirmDeleteSelectedProfile(); resolve(); }
         };
         process.stdin.on('data', onData);
@@ -186,9 +240,9 @@ switch (command) {
     
     const targetPath = path.join(paths.profilesDir, name);
     try {
-        if (fs.lstatSync(targetPath)) {
-            success(`Profile [${name}] already exists or is a placeholder. Backing up...`);
-            fs.renameSync(targetPath, `${targetPath}.bak-${Date.now()}`);
+        if (fs.existsSync(targetPath)) {
+            success(`Profile [${name}] already exists. Overwriting...`);
+            fs.rmSync(targetPath, { recursive: true, force: true });
         }
     } catch {}
     
@@ -211,15 +265,7 @@ switch (command) {
     break;
   }
   case 'check-ip':
-    try {
-        const link = fs.readlinkSync(paths.codexDir);
-        const cur = path.basename(link);
-        const d = getProfileData(cur);
-        log(`Checking [${cur}]...`);
-        const pFlag = d.proxy ? `-x ${d.proxy}` : '';
-        const out = execSync(`curl -s --connect-timeout 5 ${pFlag} ifconfig.me`).toString().trim();
-        success(`IP: ${C.bold}${out}`);
-    } catch { error('IP check failed.'); }
+    runCheckIp();
     break;
   case 'set-proxy':
     const pN = args[1]; const pU = args[2];
@@ -261,7 +307,22 @@ switch (command) {
     }
     break;
 
+  case 'clean-backups':
+    const pDir = paths.profilesDir;
+    if (fs.existsSync(pDir)) {
+        const files = fs.readdirSync(pDir);
+        let count = 0;
+        files.forEach(f => {
+            if (f.includes('.bak-')) {
+                fs.rmSync(path.join(pDir, f), { recursive: true, force: true });
+                count++;
+            }
+        });
+        success(`Removed ${count} backup folders.`);
+    }
+    break;
+
   default:
-    log(`Codex-Pro v7.2 | run, menu, chat, quota, login, set-proxy, health, init, memory`);
+    log(`Codex-Pro v7.4 | run, menu, chat, quota, login, check-ip, set-proxy, health, init, memory, clean-backups`);
     log(`Options: --no-log, --no-map, --no-memory, --focus <keyword>`);
 }

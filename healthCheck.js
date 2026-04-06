@@ -1,39 +1,80 @@
 import { spawnSync } from 'node:child_process';
 
-/**
- * Health Check for Codex-Pro Profiles
- * Detects shadow bans, quota issues, and connection problems.
- */
+const normalizeOutput = (value) => (typeof value === 'string' ? value.trim() : '');
+const QUOTA_PATTERN = /\b(rate limit(?:ed)?|quota|usage limit|too many requests|insufficient quota|resource exhausted|429|credits?\b|billing\b|upgrade to plus)\b/i;
+const UNAUTHORIZED_PATTERN = /\b(unauthorized|login required|authentication failed|invalid api key|session expired)\b/i;
+
+const extractFailureDetail = (stdout, stderr) => {
+    const combined = [normalizeOutput(stderr), normalizeOutput(stdout)].filter(Boolean).join('\n');
+    if (!combined) return '';
+
+    const lines = combined
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    const errorLine = [...lines].reverse().find((line) => /^ERROR:/i.test(line));
+    if (errorLine) return errorLine;
+
+    const usefulLine = [...lines].reverse().find((line) => {
+        const lower = line.toLowerCase();
+        return !(
+            lower.startsWith('openai codex v')
+            || lower === '--------'
+            || lower.startsWith('workdir:')
+            || lower.startsWith('model:')
+            || lower.startsWith('provider:')
+            || lower.startsWith('approval:')
+            || lower.startsWith('sandbox:')
+            || lower.startsWith('reasoning effort:')
+            || lower.startsWith('reasoning summaries:')
+            || lower.startsWith('session id:')
+            || lower.startsWith('mcp startup:')
+            || lower === 'user'
+        );
+    });
+
+    return usefulLine || lines[lines.length - 1];
+};
+
 class HealthCheck {
-    /**
-     * Run a basic health check query.
-     * @param {string} profileName 
-     * @returns {Promise<Object>} Status object
-     */
     async check(profileName) {
-        const testQuery = "echo 'Hello, health check.'";
+        const testQuery = 'Reply with exactly: OK';
         
         try {
             const start = Date.now();
-            const child = spawnSync('codex', [testQuery], { 
+            const child = spawnSync('codex', ['exec', '--skip-git-repo-check', testQuery], {
                 stdio: 'pipe', 
                 encoding: 'utf8',
-                timeout: 30000 // 30s timeout
+                env: process.env,
+                cwd: process.cwd(),
+                timeout: 10000 // 10s timeout to fast-fail
             });
             const duration = Date.now() - start;
+            const stdout = normalizeOutput(child.stdout);
+            const stderr = normalizeOutput(child.stderr);
+            const output = `${stdout}\n${stderr}`.toLowerCase();
 
             if (child.status !== 0) {
-                return { status: 'Error', message: `Exit code ${child.status}`, duration };
-            }
+                if (QUOTA_PATTERN.test(output)) {
+                    return { status: 'QuotaExceeded', message: extractFailureDetail(stdout, stderr), duration };
+                }
 
-            const output = child.stdout.toLowerCase();
+                if (UNAUTHORIZED_PATTERN.test(output)) {
+                    return { status: 'Unauthorized', message: extractFailureDetail(stdout, stderr), duration };
+                }
+
+                const detail = extractFailureDetail(stdout, stderr);
+                const message = detail ? `Exit code ${child.status}: ${detail}` : `Exit code ${child.status}`;
+                return { status: 'Error', message, duration };
+            }
             
             // Heuristics for detection
-            if (output.includes('rate limit') || output.includes('too many requests')) {
+            if (QUOTA_PATTERN.test(output)) {
                 return { status: 'RateLimited', message: 'Rate limit detected', duration };
             }
 
-            if (output.includes('unauthorized') || output.includes('login required')) {
+            if (UNAUTHORIZED_PATTERN.test(output)) {
                 return { status: 'Unauthorized', message: 'Session expired', duration };
             }
 

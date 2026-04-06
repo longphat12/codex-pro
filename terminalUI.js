@@ -7,18 +7,32 @@ export const C = {
   red: '\x1b[31m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
+  magenta: '\x1b[35m',
   cyan: '\x1b[36m',
   dim: '\x1b[2m',
   bgBlue: '\x1b[44m',
-  white: '\x1b[37m'
+  white: '\x1b[37m',
+  gray: '\x1b[90m',
+  // Ultimate 256-color palette
+  pBg: '\x1b[48;5;234m',    // Darker gray background for prompt
+  pTxt: '\x1b[38;5;255m',   // Pure white text
+  pDim: '\x1b[38;5;244m',   // Muted gray for footer
+  kw: '\x1b[38;5;75m',      // Keyword (Blueish)
+  str: '\x1b[38;5;114m',    // String (Greenish)
+  num: '\x1b[38;5;176m',    // Number (Purplish)
+  com: '\x1b[38;5;244m',    // Comment (Gray)
+  func: '\x1b[38;5;221m',   // Function (Yellowish)
+  ln: '\x1b[38;5;239m',     // Line number (Subtle gray)
+  lb: '\x1b[38;5;250m',     // Language label (Bright gray)
+  sbBg: '\x1b[48;5;235m',   // Status bar background
+  sbTxt: '\x1b[38;5;75m'    // Status bar primary text
 };
 
 export const log = (msg) => process.stdout.write(`${msg}\n`);
-export const error = (msg) => process.stdout.write(`${C.red}Error: ${msg}${C.reset}\n`);
-export const success = (msg) => process.stdout.write(`${C.green}✔ ${msg}${C.reset}\n`);
-
 export const stripAnsi = (value = '') => String(value).replace(/\x1b\[[0-9;]*m/g, '');
 export const visibleWidth = (value = '') => stripAnsi(value).length;
+export const error = (msg) => process.stdout.write(`${C.red}Error: ${msg}${C.reset}\n`);
+export const success = (msg) => process.stdout.write(`${C.green}✔ ${msg}${C.reset}\n`);
 
 const padCell = (value, width, align = 'left') => {
   const text = String(value ?? '');
@@ -43,8 +57,8 @@ const formatShortcut = (key, label) =>
 
 export const formatBrand = (blinkOn) =>
   blinkOn
-    ? `${C.bold}${C.cyan}LONG PHÁT${C.reset}`
-    : `${C.bold}${C.dim}LONG PHÁT${C.reset}`;
+    ? `${C.bold}${C.cyan}Codex-Pro${C.reset}`
+    : `${C.bold}${C.dim}Codex-Pro${C.reset}`;
 
 export const renderMenu = ({
   profiles,
@@ -88,11 +102,12 @@ export const renderMenu = ({
   const actionLine = [
     formatShortcut('c', 'Chat'),
     formatShortcut('i', 'Check IP'),
+    formatShortcut('l', 'Login'),
     formatShortcut('d', 'Delete'),
     formatShortcut('q', 'Quit')
   ].join(` ${C.dim}|${C.reset} `);
 
-  process.stdout.write(`\n ${formatBrand(blinkOn)} ${C.dim}Personal Bot Console${C.reset}\n`);
+  process.stdout.write(`\n ${formatBrand(blinkOn)} ${C.dim}Profile Manager${C.reset}\n`);
   process.stdout.write(` ${C.bold}Navigation${C.reset} ${C.dim}→${C.reset} ${navigationLine}\n`);
   process.stdout.write(` ${C.bold}Actions${C.reset}    ${C.dim}→${C.reset} ${actionLine}\n\n`);
   process.stdout.write(` ${topBorder}\n`);
@@ -115,5 +130,5 @@ export const renderMenu = ({
   process.stdout.write(` ${bottomBorder}\n`);
   process.stdout.write(`\n ${C.cyan}${C.bold}Selected:${C.reset} ${selected?.name || '-'}  ${C.green}${C.bold}Active:${C.reset} ${activeName || 'None'}\n`);
   process.stdout.write(` ${C.dim}${formatQuotaDetails(selected?.rateLimits)}${C.reset}\n`);
-  process.stdout.write(` ${C.dim}Legend: ACTIVE = profile dang lien ket, dong co nen xanh = vi tri hien tai.${C.reset}\n`);
+  process.stdout.write(` ${C.dim}Legend: ACTIVE = linked profile, highlighted row = current selection.${C.reset}\n`);
 };

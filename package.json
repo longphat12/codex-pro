@@ -1,0 +1,14 @@
+{
+  "name": "codex-pro",
+  "version": "7.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Codex-Pro CLI wrapper for native Codex CLI multi-profile workflows",
+  "bin": {
+    "codex-pro": "./codex-pro.js"
+  },
+  "scripts": {
+    "chat": "node ./codex-pro.js chat",
+    "menu": "node ./codex-pro.js menu"
+  }
+}

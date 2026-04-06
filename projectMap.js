@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAP_FILE = path.join(process.cwd(), '.project-map.md');
 const IGNORE = new Set([
     'node_modules', 'vendor', 'assets', 'dist', 'build',
@@ -12,10 +10,7 @@ const IGNORE = new Set([
 ]);
 
 class ProjectMap {
-    init(silent = true) {
-        if (!silent) {
-            // Reserved for future terminal logging.
-        }
+    init() {
         this.writeSnapshot();
         return MAP_FILE;
     }
@@ -176,7 +171,7 @@ ${tree}
         return '';
     }
 
-    async logChange(file, type = '*') {
+    logChange() {
         if (!fs.existsSync(MAP_FILE)) return;
         let content = fs.readFileSync(MAP_FILE, 'utf8');
         const timestamp = new Date().toLocaleString();
